@@ -1,0 +1,26 @@
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "patient@gmail.com",
+  "password": "123456",
+  "role": "patient"
+}
+###
+
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "patient@gmail.com",
+  "password": "123456"
+}
+
+###
+
+GET http://localhost:5000/api/auth/test
+
+###
+
+GET http://localhost:5000/api/auth/test
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhOWJmNTg4NjViYjE5OTkzZTEwNDQ0NyIsInJvbGUiOiJwYXRpZW50IiwiaWF0IjoxNzg4NjA2NDgyLCJleHAiOjE3ODg2OTI4ODJ9.ckGMSwPEMrbiLbxwSFtYnzy-WPNcVYocCF7JcKfDSMA
