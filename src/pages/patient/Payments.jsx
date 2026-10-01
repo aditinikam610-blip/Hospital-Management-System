@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import Card from "../../components/common/Card";
 import Table from "../../components/common/Table";
@@ -7,45 +7,113 @@ import Modal from "../../components/common/Modal";
 import Input from "../../components/common/Input";
 import Select from "../../components/common/Select";
 import EmptyState from "../../components/common/EmptyState";
-import { useAuth } from "../../context/AuthContext";
-import {
-  getAppointmentsByPatient,
-  enrichAppointment,
-  getPaymentForAppointment,
-  addPayment,
-} from "../../utils/dataHelpers";
+import api from "../../services/api";
 
 function Payments() {
-  const { profile } = useAuth();
-  const [version, setVersion] = useState(0);
+  const [appointments, setAppointments] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const [paying, setPaying] = useState(null);
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState("");
   const [error, setError] = useState("");
 
-  // Only completed appointments are billable — matches the schema's
-  // relationship (a payment belongs to one appointment).
-  const billable = getAppointmentsByPatient(profile.patient_id)
-    .map(enrichAppointment)
+  // Fetch completed appointments and payment history
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [appointmentResponse, paymentResponse] =
+          await Promise.all([
+            api.get("/appointments/my"),
+            api.get("/payments/my"),
+          ]);
+
+        if (appointmentResponse.data.success) {
+          setAppointments(appointmentResponse.data.appointments);
+        }
+
+        if (paymentResponse.data.success) {
+          setPayments(paymentResponse.data.payments);
+        }
+      } catch (error) {
+        console.error("Failed to load payment data:", error);
+
+        setError(
+          error.response?.data?.message ||
+            "Failed to load payment data."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Only completed appointments are billable
+  const billable = appointments
     .filter((a) => a.status === "Completed")
-    .map((a) => ({ ...a, payment: getPaymentForAppointment(a.appointment_id) }));
+    .map((a) => {
+      const payment = payments.find(
+        (p) => p.appointment_id?._id === a._id
+      );
 
-  const handlePay = () => {
-    setError("");
-    if (!amount || Number(amount) <= 0) return setError("Enter a valid amount.");
-    if (!mode) return setError("Select a payment mode.");
-
-    addPayment({
-      amount: Number(amount),
-      payment_date: new Date().toISOString().split("T")[0],
-      payment_mode: mode,
-      appointment_id: paying.appointment_id,
+      return {
+        ...a,
+        appointment_id: a._id,
+        payment,
+      };
     });
-    setPaying(null);
-    setAmount("");
-    setMode("");
-    setVersion((v) => v + 1);
+
+  // Create payment
+  const handlePay = async () => {
+    setError("");
+
+    if (!amount || Number(amount) <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
+    if (!mode) {
+      setError("Select a payment mode.");
+      return;
+    }
+
+    try {
+      await api.post("/payments", {
+        amount: Number(amount),
+        payment_mode: mode,
+        appointment_id: paying.appointment_id,
+      });
+
+      setPaying(null);
+      setAmount("");
+      setMode("");
+
+      // Refresh payments after successful payment
+      const response = await api.get("/payments/my");
+
+      if (response.data.success) {
+        setPayments(response.data.payments);
+      }
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+          "Failed to create payment."
+      );
+    }
   };
+
+  if (loading) {
+    return (
+      <Card title="Payments">
+        <p className="text-sm text-text-muted">
+          Loading payment information...
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card title="Payments">
@@ -59,9 +127,32 @@ function Payments() {
           rows={billable}
           rowKey="appointment_id"
           columns={[
-            { key: "appointment_id", header: "Appointment" },
-            { key: "doctor", header: "Doctor", render: (r) => r.doctor?.name },
-            { key: "date", header: "Date", render: (r) => format(parseISO(r.date), "dd MMM yyyy") },
+            {
+              key: "appointment_id",
+              header: "Appointment",
+            },
+
+            {
+              key: "doctor_id",
+              header: "Doctor",
+              render: (r) =>
+                r.doctor_id?.name ||
+                r.doctor_id?.full_name ||
+                "-",
+            },
+
+            {
+              key: "date",
+              header: "Date",
+              render: (r) =>
+                r.date
+                  ? format(
+                      parseISO(r.date),
+                      "dd MMM yyyy"
+                    )
+                  : "-",
+            },
+
             {
               key: "status",
               header: "Payment Status",
@@ -77,14 +168,24 @@ function Payments() {
                 </span>
               ),
             },
+
             {
               key: "actions",
               header: "",
               render: (r) =>
                 r.payment ? (
-                  <span className="text-xs text-text-muted">₹{r.payment.amount} via {r.payment.payment_mode}</span>
+                  <span className="text-xs text-text-muted">
+                    ₹{r.payment.amount} via{" "}
+                    {r.payment.payment_mode}
+                  </span>
                 ) : (
-                  <Button size="sm" onClick={() => setPaying(r)}>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setPaying(r);
+                      setError("");
+                    }}
+                  >
                     Pay Now
                   </Button>
                 ),
@@ -95,23 +196,55 @@ function Payments() {
 
       <Modal
         open={!!paying}
-        onClose={() => setPaying(null)}
+        onClose={() => {
+          setPaying(null);
+          setError("");
+          setAmount("");
+          setMode("");
+        }}
         title="Record Payment"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setPaying(null)}>Cancel</Button>
-            <Button onClick={handlePay}>Confirm Payment</Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPaying(null);
+                setError("");
+                setAmount("");
+                setMode("");
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button onClick={handlePay}>
+              Confirm Payment
+            </Button>
           </>
         }
       >
         <div className="space-y-4">
           {error && (
-            <p className="rounded-card bg-status-danger-bg px-3 py-2 text-sm text-status-danger">{error}</p>
+            <p className="rounded-card bg-status-danger-bg px-3 py-2 text-sm text-status-danger">
+              {error}
+            </p>
           )}
+
           <p className="text-sm text-text-muted">
-            Appointment #{paying?.appointment_id} with {paying?.doctor?.name}
+            Appointment #{paying?.appointment_id} with{" "}
+            {paying?.doctor_id?.name ||
+              paying?.doctor_id?.full_name ||
+              "Doctor"}
           </p>
-          <Input label="Amount (₹)" type="number" required value={amount} onChange={(e) => setAmount(e.target.value)} />
+
+          <Input
+            label="Amount (₹)"
+            type="number"
+            required
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+
           <Select
             label="Payment Mode"
             required
@@ -121,11 +254,13 @@ function Payments() {
               { value: "UPI", label: "UPI" },
               { value: "Card", label: "Card" },
               { value: "Cash", label: "Cash" },
-              { value: "Net Banking", label: "Net Banking" },
+              { value: "Online", label: "Online" },
             ]}
           />
+
           <p className="text-xs text-text-muted">
-            This is a UI simulation only — no real payment gateway is connected.
+            This is a UI simulation only — no real payment
+            gateway is connected.
           </p>
         </div>
       </Modal>

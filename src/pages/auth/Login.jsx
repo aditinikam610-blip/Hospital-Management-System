@@ -29,7 +29,7 @@ function Login() {
 
   const handleChange = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
     const validationErrors = validate(form);
@@ -37,7 +37,7 @@ function Login() {
     if (Object.keys(validationErrors).length > 0) return;
 
     setSubmitting(true);
-    const result = login(form);
+    const result = await login(form);
     setSubmitting(false);
 
     if (!result.success) {

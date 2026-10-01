@@ -1,229 +1,309 @@
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
+createContext,
+useContext,
+useEffect,
+useState,
+useCallback,
 } from "react";
 
-import { accounts } from "../data/mock/accounts";
-import { patients } from "../data/mock/patients";
-import { doctors } from "../data/mock/doctors";
-import { admins } from "../data/mock/admins";
+import api from "../services/api";
 
 const AuthContext = createContext(null);
 
 const STORAGE_KEY = "hms_auth";
 
-function getProfileForAccount(account) {
-  if (!account) return null;
+export function AuthProvider({ children }) {
+const [authState, setAuthState] = useState(null);
+const [initializing, setInitializing] = useState(true);
 
-  if (account.role === "patient") {
-    return patients.find(
-      (p) => p.account_id === account.account_id
-    );
+// ============================
+// RESTORE LOGIN AFTER REFRESH
+// ============================
+useEffect(() => {
+try {
+const stored = localStorage.getItem(STORAGE_KEY);
+
+
+  if (stored) {
+    setAuthState(JSON.parse(stored));
   }
-
-  if (account.role === "doctor") {
-    return doctors.find(
-      (d) => d.account_id === account.account_id
-    );
-  }
-
-  if (account.role === "admin") {
-    return admins.find(
-      (a) => a.account_id === account.account_id
-    );
-  }
-
-  return null;
+} catch {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem("hms_token");
 }
 
-export function AuthProvider({ children }) {
-  const [authState, setAuthState] = useState(null);
-  const [initializing, setInitializing] = useState(true);
+setInitializing(false);
 
-  // Restore login session
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
 
-      if (stored) {
-        setAuthState(JSON.parse(stored));
-      }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
+}, []);
+
+// ============================
+// LOGIN
+// ============================
+const login = useCallback(
+async ({ email, password, role }) => {
+try {
+const response = await api.post("/auth/login", {
+email,
+password,
+});
+
+
+    const data = response.data;
+
+    if (!data.success) {
+      return {
+        success: false,
+        message: data.message || "Login failed",
+      };
     }
 
-    setInitializing(false);
-  }, []);
-
-  // Login
-  const login = useCallback(
-    ({ email, password, role }) => {
-      const account = accounts.find(
-        (a) =>
-          a.email.toLowerCase() === email.toLowerCase() &&
-          a.role === role
-      );
-
-      if (!account) {
-        return {
-          success: false,
-          message:
-            "No account found for this email and role.",
-        };
-      }
-
-      // Mock authentication only
-      if (account.password !== password) {
-        return {
-          success: false,
-          message: "Incorrect password.",
-        };
-      }
-
-      const profile = getProfileForAccount(account);
-
-      const nextState = {
-        account,
-        profile,
-      };
-
-      setAuthState(nextState);
-
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(nextState)
-      );
-
-      localStorage.setItem(
-        "hms_token",
-        `mock-token-${account.account_id}`
-      );
-
+    // ============================
+    // CHECK SELECTED ROLE
+    // ============================
+    if (data.user.role !== role) {
       return {
-        success: true,
+        success: false,
+        message: `This account is registered as ${data.user.role}.`,
       };
-    },
-    []
-  );
+    }
 
-  // Patient registration
-  const registerPatient = useCallback(
-    ({
-      name,
-      email,
-      password,
-      age,
-      gender,
-      address,
-      phone_no,
-    }) => {
-      const existing = accounts.find(
-        (a) =>
-          a.email.toLowerCase() === email.toLowerCase()
-      );
+    // ============================
+    // SAVE JWT
+    // ============================
+    localStorage.setItem("hms_token", data.token);
 
-      if (existing) {
-        return {
-          success: false,
-          message:
-            "An account with this email already exists.",
-        };
+    let profile = null;
+
+    // ============================
+    // PATIENT PROFILE
+    // ============================
+    if (data.user.role === "patient") {
+      try {
+        const profileResponse = await api.get(
+          "/patients/profile"
+        );
+
+        if (profileResponse.data.success) {
+          profile = profileResponse.data.patient;
+        }
+      } catch (error) {
+        console.error(
+          "Patient profile could not be loaded:",
+          error.response?.data || error.message
+        );
       }
+    }
 
-      const account_id = accounts.length
-        ? Math.max(
-            ...accounts.map((a) => a.account_id)
-          ) + 1
-        : 1;
+    // ============================
+    // DOCTOR PROFILE
+    // ============================
+    if (data.user.role === "doctor") {
+      try {
+        // First try the logged-in doctor's profile
+        const doctorResponse = await api.get(
+          "/doctors/profile"
+        );
 
-      const patient_id = patients.length
-        ? Math.max(
-            ...patients.map((p) => p.patient_id)
-          ) + 1
-        : 1;
+        if (doctorResponse.data.success) {
+          profile = doctorResponse.data.doctor;
+        }
+      } catch (error) {
+        console.error(
+          "Doctor profile endpoint failed. Trying doctor list...",
+          error.response?.data || error.message
+        );
 
-      const newAccount = {
-        account_id,
-        email,
-        password,
-        role: "patient",
-      };
+        // ============================
+        // FALLBACK:
+        // GET ALL DOCTORS
+        // ============================
+        try {
+          const doctorsResponse = await api.get(
+            "/doctors"
+          );
 
-      const newPatient = {
-        patient_id,
-        name,
-        age,
-        gender,
-        address,
-        phone_no,
-        account_id,
-      };
+          if (doctorsResponse.data.success) {
+            const doctors = doctorsResponse.data.doctors || [];
 
-      // Mock data only
-      accounts.push(newAccount);
-      patients.push(newPatient);
+            const loggedInDoctor = doctors.find((doctor) => {
+              const accountId =
+                doctor.account_id?._id ||
+                doctor.account_id;
 
-      const nextState = {
-        account: newAccount,
-        profile: newPatient,
-      };
+              return (
+                accountId?.toString() ===
+                data.user.id?.toString()
+              );
+            });
 
-      setAuthState(nextState);
+            if (loggedInDoctor) {
+              profile = {
+                doctor_id: loggedInDoctor._id,
+                name: loggedInDoctor.name,
+                specialization:
+                  loggedInDoctor.specialization,
+                department:
+                  loggedInDoctor.department,
+                phone_no: loggedInDoctor.phone_no,
+                account_id: loggedInDoctor.account_id,
+              };
+            }
+          }
+        } catch (fallbackError) {
+          console.error(
+            "Doctor fallback profile loading failed:",
+            fallbackError.response?.data ||
+              fallbackError.message
+          );
+        }
+      }
+    }
 
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(nextState)
-      );
+    // ============================
+    // SAVE AUTH STATE
+    // ============================
+    const nextState = {
+      account: data.user,
+      profile,
+    };
 
-      localStorage.setItem(
-        "hms_token",
-        `mock-token-${newAccount.account_id}`
-      );
+    setAuthState(nextState);
 
-      return {
-        success: true,
-      };
-    },
-    []
-  );
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(nextState)
+    );
 
-  // Logout
-  const logout = useCallback(() => {
-    setAuthState(null);
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Login Error:", error);
 
-    localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem("hms_token");
-  }, []);
+    localStorage.removeItem(STORAGE_KEY);
 
-  const value = {
-    isAuthenticated: !!authState,
-    account: authState?.account || null,
-    profile: authState?.profile || null,
-    role: authState?.account?.role || null,
-    initializing,
-    login,
-    registerPatient,
-    logout,
-  };
+    return {
+      success: false,
+      message:
+        error.response?.data?.message ||
+        "Unable to connect to the server.",
+    };
+  }
+},
+[]
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+
+);
+
+// ============================
+// REGISTER USER
+// ============================
+const registerUser = useCallback(
+async ({
+name,
+email,
+password,
+age,
+gender,
+address,
+phone_no,
+role,
+specialization,
+department,
+}) => {
+try {
+const response = await api.post(
+"/auth/register",
+{
+name,
+email,
+password,
+age,
+gender,
+address,
+phone_no,
+role,
+specialization,
+department,
+}
+);
+
+
+    const data = response.data;
+
+    if (!data.success) {
+      return {
+        success: false,
+        message:
+          data.message || "Registration failed",
+      };
+    }
+
+    return {
+      success: true,
+      message: data.message,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error.response?.data?.message ||
+        "Unable to connect to the server.",
+    };
+  }
+},
+[]
+
+
+);
+
+// ============================
+// LOGOUT
+// ============================
+const logout = useCallback(() => {
+setAuthState(null);
+
+
+localStorage.removeItem(STORAGE_KEY);
+localStorage.removeItem("hms_token");
+
+
+}, []);
+
+// ============================
+// CONTEXT VALUE
+// ============================
+const value = {
+isAuthenticated: !!authState,
+account: authState?.account || null,
+profile: authState?.profile || null,
+role: authState?.account?.role || null,
+initializing,
+login,
+registerUser,
+logout,
+};
+
+return (
+<AuthContext.Provider value={value}>
+{children}
+</AuthContext.Provider>
+);
 }
 
+// ============================
+// USE AUTH HOOK
+// ============================
 export function useAuth() {
-  const ctx = useContext(AuthContext);
+const ctx = useContext(AuthContext);
 
-  if (!ctx) {
-    throw new Error(
-      "useAuth must be used within an AuthProvider"
-    );
-  }
+if (!ctx) {
+throw new Error(
+"useAuth must be used within an AuthProvider"
+);
+}
 
-  return ctx;
+return ctx;
 }

@@ -40,7 +40,8 @@ const createPrescription = async (req, res) => {
     if (appointment.status !== "Accepted") {
       return res.status(400).json({
         success: false,
-        message: "Prescription can be created only for an accepted appointment"
+        message:
+          "Prescription can be created only for an accepted appointment"
       });
     }
 
@@ -51,7 +52,8 @@ const createPrescription = async (req, res) => {
     if (existingPrescription) {
       return res.status(400).json({
         success: false,
-        message: "Prescription already exists for this appointment"
+        message:
+          "Prescription already exists for this appointment"
       });
     }
 
@@ -67,6 +69,8 @@ const createPrescription = async (req, res) => {
       prescription
     });
   } catch (error) {
+    console.error("Create prescription error:", error);
+
     res.status(500).json({
       success: false,
       message: "Failed to create prescription"
@@ -74,6 +78,44 @@ const createPrescription = async (req, res) => {
   }
 };
 
+
+// GET ALL PRESCRIPTIONS - ADMIN
+const getAllPrescriptions = async (req, res) => {
+  try {
+    const prescriptions = await Prescription.find()
+      .populate({
+        path: "appointment_id",
+        populate: [
+          {
+            path: "patient_id",
+            select: "name age gender phone_no address account_id"
+          },
+          {
+            path: "doctor_id",
+            select:
+              "name full_name specialization department phone_no account_id"
+          }
+        ]
+      })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: prescriptions.length,
+      prescriptions
+    });
+  } catch (error) {
+    console.error("Get all prescriptions error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch prescriptions"
+    });
+  }
+};
+
+
 module.exports = {
-  createPrescription
+  createPrescription,
+  getAllPrescriptions
 };

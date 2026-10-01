@@ -37,7 +37,10 @@ const createPayment = async (req, res) => {
       });
     }
 
-    if (appointment.status !== "Accepted") {
+    if (
+  appointment.status !== "Accepted" &&
+  appointment.status !== "Completed"
+) {
       return res.status(400).json({
         success: false,
         message: "Payment allowed only for accepted appointments"

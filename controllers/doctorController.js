@@ -1,3 +1,4 @@
+
 const Doctor = require("../models/Doctor");
 
 // ============================
@@ -50,11 +51,64 @@ const createDoctor = async (req, res) => {
       message: "Doctor profile created successfully",
       doctor
     });
-
   } catch (error) {
+    console.error("Create Doctor Error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to create doctor profile"
+      message: "Failed to create doctor profile",
+      error: error.message
+    });
+  }
+};
+
+
+// ============================
+// GET LOGGED-IN DOCTOR PROFILE
+// ============================
+const getDoctorProfile = async (req, res) => {
+  try {
+    // Check JWT user information
+    console.log("Doctor Profile - req.user:", req.user);
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: "User information not found in token"
+      });
+    }
+
+    const doctor = await Doctor.findOne({
+      account_id: req.user.id
+    }).populate("account_id", "email role");
+
+    console.log("Doctor Profile Found:", doctor);
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      doctor: {
+        doctor_id: doctor._id,
+        name: doctor.name,
+        specialization: doctor.specialization,
+        department: doctor.department,
+        phone_no: doctor.phone_no,
+        account_id: doctor.account_id
+      }
+    });
+  } catch (error) {
+    console.error("Get Doctor Profile Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get doctor profile",
+      error: error.message
     });
   }
 };
@@ -72,11 +126,13 @@ const getAllDoctors = async (req, res) => {
       success: true,
       doctors
     });
-
   } catch (error) {
+    console.error("Get All Doctors Error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to get doctors"
+      message: "Failed to get doctors",
+      error: error.message
     });
   }
 };
@@ -101,11 +157,13 @@ const getDoctor = async (req, res) => {
       success: true,
       doctor
     });
-
   } catch (error) {
+    console.error("Get Doctor Error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to get doctor"
+      message: "Failed to get doctor",
+      error: error.message
     });
   }
 };
@@ -122,6 +180,13 @@ const updateDoctor = async (req, res) => {
       department,
       phone_no
     } = req.body;
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: "User information not found in token"
+      });
+    }
 
     const doctor = await Doctor.findOneAndUpdate(
       {
@@ -151,11 +216,13 @@ const updateDoctor = async (req, res) => {
       message: "Doctor profile updated successfully",
       doctor
     });
-
   } catch (error) {
+    console.error("Update Doctor Error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to update doctor profile"
+      message: "Failed to update doctor profile",
+      error: error.message
     });
   }
 };
@@ -163,6 +230,7 @@ const updateDoctor = async (req, res) => {
 
 module.exports = {
   createDoctor,
+  getDoctorProfile,
   getAllDoctors,
   getDoctor,
   updateDoctor

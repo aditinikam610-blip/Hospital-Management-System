@@ -170,7 +170,6 @@ const getAppointments = async (req, res) => {
 // ============================
 const getPrescriptions = async (req, res) => {
   try {
-
     const patient = await Patient.findOne({
       account_id: req.user.id
     });
@@ -192,10 +191,14 @@ const getPrescriptions = async (req, res) => {
 
     const prescriptions = await Prescription.find({
       appointment_id: { $in: appointmentIds }
-    }).populate(
-      "appointment_id",
-      "date time status"
-    );
+    }).populate({
+      path: "appointment_id",
+      select: "date time status doctor_id",
+      populate: {
+        path: "doctor_id",
+        select: "name specialization department phone_no"
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -203,12 +206,18 @@ const getPrescriptions = async (req, res) => {
     });
 
   } catch (error) {
+    console.error(
+      "Get Prescriptions Error:",
+      error
+    );
+
     res.status(500).json({
       success: false,
       message: "Failed to get prescriptions"
     });
   }
 };
+
 
 
 module.exports = {

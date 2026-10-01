@@ -6,6 +6,7 @@ const {
   getAppointment,
   getDoctorAppointments,
   updateAppointmentStatus,
+  adminUpdateAppointmentStatus,
   cancelAppointment
 } = require("../controllers/appointmentController");
 
@@ -76,6 +77,17 @@ router.get(
   protect,
   authorize("patient", "doctor", "admin"),
   getAppointment
+);
+
+// ============================
+// ADMIN UPDATE APPOINTMENT STATUS
+// ============================
+
+router.put(
+  "/admin/:id/status",
+  protect,
+  authorize("admin"),
+  adminUpdateAppointmentStatus
 );
 
 
