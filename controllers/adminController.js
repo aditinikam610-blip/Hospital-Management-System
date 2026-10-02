@@ -70,22 +70,41 @@ const getAllAppointments = async (req, res) => {
 };
 
 // GET ALL PAYMENTS
+// GET ALL PAYMENTS
 const getAllPayments = async (req, res) => {
   try {
     const payments = await Payment.find()
-      .populate(
-        "appointment_id",
-        "date time status patient_id doctor_id"
-      );
+      .populate({
+        path: "appointment_id",
+        select: "date time status patient_id doctor_id",
+        populate: [
+          {
+            path: "patient_id",
+            select: "name"
+          },
+          {
+            path: "doctor_id",
+            select: "name"
+          }
+        ]
+      });
+
+    console.log(
+      "PAYMENTS WITH PATIENT/DOCTOR:",
+      JSON.stringify(payments, null, 2)
+    );
 
     res.status(200).json({
       success: true,
       payments
     });
   } catch (error) {
+    console.error("Get payments error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to get payments"
+      message: "Failed to get payments",
+      error: error.message
     });
   }
 };
