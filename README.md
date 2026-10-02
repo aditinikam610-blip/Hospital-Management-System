@@ -1,16 +1,65 @@
-# React + Vite
+# Hospital Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack Hospital Management System built using **React, Node.js, Express.js, and MongoDB**.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+* **Frontend:** React, Vite, Tailwind CSS, Axios
+* **Backend:** Node.js, Express.js, Mongoose
+* **Database:** MongoDB
+* **Authentication:** JWT, bcrypt
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* Admin, Doctor, and Patient login
+* Patient and Doctor management
+* Appointment booking and management
+* Payment management
+* Prescription management
+* Admin dashboard
+* Role-based authentication
 
-## Expanding the ESLint configuration
+## Run the Project
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Clone Integration Branch
+
+```bash
+git clone -b integration YOUR_GITHUB_REPO_URL
+cd PROJECT_FOLDER
+```
+
+### Backend
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Create a `.env` file in the backend with the required MongoDB and JWT configuration.
+
+### Local URLs
+
+```text
+Frontend: http://localhost:5173
+Backend:  http://localhost:5000
+```
+
+## Git Workflow
+
+Get latest integration changes:
+
+```bash
+git checkout integration
+git pull origin integration
+```
+
+The `integration` branch contains the combined frontend and backend project.
